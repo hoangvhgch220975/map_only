@@ -48,7 +48,7 @@
               const destLatLng = L.latLng(data[0].lat, data[0].lon);
               L.marker(destLatLng).addTo(map).bindPopup("📌 " + searchQuery).openPopup();
 
-              // B3: Hiển thị đường đi
+              // B3: Hiển thị đường đi với màu xanh dương
               const routeControl = L.Routing.control({
                 waypoints: [currentLatLng, destLatLng],
                 routeWhileDragging: false,
@@ -56,6 +56,9 @@
                 showAlternatives: false,
                 createMarker: function(i, wp, nWps) {
                   return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
+                },
+                lineOptions: {
+                  styles: [{ color: 'blue', opacity: 0.7, weight: 5 }] // Đường màu xanh dương
                 }
               }).addTo(map);
             } else {
