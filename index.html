@@ -1,21 +1,73 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Map Only</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
-  </style>
+<head> 
+<title>Map Search & Route</title> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" /> 
+<style> 
+html, body, #map { height: 100%; margin: 0; padding: 0; } 
+</style>
 </head>
-<body>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    var map = L.map('map').setView([21.0285, 105.8542], 15); // Hà Nội
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-  </script>
+<body> 
+<div id="map"></div> 
+
+<!-- Leaflet --> 
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script> 
+<!-- Routing plugin --> 
+<script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.min.js"></script> 
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" /> 
+
+<script> 
+// Create a map in Hanoi 
+const map = L.map('map').setView([21.0285, 105.8542], 13); 
+
+// Background layer 
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+attribution: '&copy; OpenStreetMap contributors' 
+}).addTo(map); 
+
+// Get search information from URL (?q=...) 
+const params = new URLSearchParams(window.location.search); 
+const query = params.get('q'); 
+
+// Function to search for locations 
+if (query) { 
+fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`) 
+.then(res => res.json()) 
+.then(data => { 
+if (data.length > 0) { 
+const destLat = parseFloat(data[0].lat); 
+const destLon = parseFloat(data[0].lon); 
+
+// Destination marker 
+L.marker([destLat, destLon]).addTo(map).bindPopup(query).openPopup(); 
+map.setView([destLat, destLon], 15); 
+
+// Get the current location and draw directions 
+if (navigator.geolocation) { 
+navigator.geolocation.getCurrentPosition(position => { 
+const userLat = position.coords.latitude;
+const userLon = position.coords.longitude;
+
+L.Routing.control({
+waypoints: [
+L.latLng(userLat, userLon),
+L.latLng(destLat, destLon)
+],
+routeWhileDragging: false,
+language: 'en'
+}).addTo(map);
+}, err => {
+console.warn("Failed to get user location:", err.message);
+});
+} else {
+alert("Browser does not support geolocation.");
+}
+} else {
+alert("Address not found.");
+}
+});
+}
+</script>
 </body>
 </html>
