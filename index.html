@@ -46,7 +46,7 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start Point<br><strong>You are here</strong>").openPopup();
+  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 You are here").openPopup();
 
   const params = new URLSearchParams(window.location.search);
   const searchQuery = params.get('q');
