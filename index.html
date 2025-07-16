@@ -39,19 +39,15 @@
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-  const fixedStartLatLng = L.latLng(21.023872, 105.790434); // Fixed Start Point
-
+  const fixedStartLatLng = L.latLng(21.023872, 105.790434);
   const map = L.map('map').setView(fixedStartLatLng, 14);
 
-  // Add OpenStreetMap tiles
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Start marker
   L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start Point");
 
-  // Get destination from URL parameter ?q=
   const params = new URLSearchParams(window.location.search);
   const searchQuery = params.get('q');
 
@@ -61,11 +57,8 @@
       .then(data => {
         if (data.length > 0) {
           const destLatLng = L.latLng(data[0].lat, data[0].lon);
-
-          // Destination marker
           L.marker(destLatLng).addTo(map).bindPopup("🏁 " + searchQuery);
 
-          // Routing control setup
           const routingControl = L.Routing.control({
             waypoints: [fixedStartLatLng, destLatLng],
             routeWhileDragging: false,
@@ -80,18 +73,31 @@
             }
           }).addTo(map);
 
-          // Toggle the directions panel
+          // Wait for the directions container to appear, then allow toggling
           const toggleBtn = document.getElementById('toggleInstructions');
-          toggleBtn.addEventListener('click', () => {
+
+          const observer = new MutationObserver(() => {
             const container = document.querySelector('.leaflet-routing-container');
-            if (container.style.display === 'none') {
-              container.style.display = 'block';
-              toggleBtn.textContent = "❌ Hide Directions";
-            } else {
-              container.style.display = 'none';
-              toggleBtn.textContent = "🗺️ Show Directions";
+            if (container) {
+              container.style.display = 'none'; // Hide by default
+
+              // Only add event listener after container is ready
+              toggleBtn.addEventListener('click', () => {
+                if (container.style.display === 'none') {
+                  container.style.display = 'block';
+                  toggleBtn.textContent = "❌ Hide Directions";
+                } else {
+                  container.style.display = 'none';
+                  toggleBtn.textContent = "🗺️ Show Directions";
+                }
+              });
+
+              observer.disconnect(); // Stop observing after found
             }
           });
+
+          // Start observing changes in the map container
+          observer.observe(document.body, { childList: true, subtree: true });
 
         } else {
           alert("❌ Destination not found.");
