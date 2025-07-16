@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Map Route from Current Location</title>
+  <title>Map Route from Fixed Start Point</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
@@ -19,58 +19,49 @@
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-  const map = L.map('map').setView([16.0471, 108.2062], 6); // Việt Nam trung tâm
+  // 🟢 Điểm bắt đầu cố định (Greenwich Ha Noi)
+  const fixedStartLatLng = L.latLng(21.023872, 105.790434);
+
+  const map = L.map('map').setView(fixedStartLatLng, 14); // Zoom vào điểm bắt đầu
 
   // Add base layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Lấy query từ URL ?q=
+  // Marker tại điểm bắt đầu
+  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start Point").openPopup();
+
+  // Lấy địa điểm cần đến từ query ?q=
   const params = new URLSearchParams(window.location.search);
-  const searchQuery = params.get('q'); // địa điểm cần tìm
+  const searchQuery = params.get('q');
 
-  let currentLatLng = null;
+  if (searchQuery) {
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.length > 0) {
+          const destLatLng = L.latLng(data[0].lat, data[0].lon);
 
-  // B1: Lấy vị trí hiện tại
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      currentLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
-      L.marker(currentLatLng).addTo(map).bindPopup("📍 You are here").openPopup();
-      map.setView(currentLatLng, 14);
+          L.marker(destLatLng).addTo(map).bindPopup("🏁 " + searchQuery).openPopup();
 
-      if (searchQuery) {
-        // B2: Tìm điểm đến từ query
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.length > 0) {
-              const destLatLng = L.latLng(data[0].lat, data[0].lon);
-              L.marker(destLatLng).addTo(map).bindPopup("📌 " + searchQuery).openPopup();
-
-              // B3: Hiển thị đường đi với màu xanh dương
-              const routeControl = L.Routing.control({
-                waypoints: [currentLatLng, destLatLng],
-                routeWhileDragging: false,
-                fitSelectedRoutes: true, // ✅ Tự zoom để thấy toàn tuyến
-                showAlternatives: false,
-                createMarker: function(i, wp, nWps) {
-                  return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
-                },
-                lineOptions: {
-                  styles: [{ color: 'blue', opacity: 0.7, weight: 5 }] // Đường màu xanh dương
-                }
-              }).addTo(map);
-            } else {
-              alert("❌ Location not found.");
+          // Hiển thị đường đi
+          L.Routing.control({
+            waypoints: [fixedStartLatLng, destLatLng],
+            routeWhileDragging: false,
+            fitSelectedRoutes: true,
+            showAlternatives: false,
+            createMarker: function(i, wp) {
+              return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
+            },
+            lineOptions: {
+              styles: [{ color: 'blue', opacity: 0.7, weight: 5 }]
             }
-          });
-      }
-    }, err => {
-      alert("⚠️ Cannot access your location: " + err.message);
-    });
-  } else {
-    alert("❌ Your browser does not support Geolocation.");
+          }).addTo(map);
+        } else {
+          alert("❌ Destination not found.");
+        }
+      });
   }
 </script>
 
