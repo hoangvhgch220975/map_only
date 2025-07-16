@@ -1,128 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Map Route with Manual Control</title>
+  <title>Map Route from Fixed Start Point</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; width: 100%; }
-    #routeBtn {
+    .custom-button {
       position: absolute;
       top: 10px;
-      left: 10px;
+      right: 10px;
       z-index: 1000;
-      padding: 8px 16px;
-      background-color: #007bff;
-      color: white;
-      border: none;
+      background: white;
+      border: 2px solid #888;
       border-radius: 5px;
+      padding: 6px 10px;
       cursor: pointer;
-    }
-    #routeInstructions {
-      position: absolute;
-      top: 50px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.9);
-      max-height: 60%;
-      overflow-y: auto;
-      padding: 10px;
-      border-radius: 5px;
-      width: 300px;
-      display: none;
-      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
   </style>
 </head>
 <body>
 
-<!-- Nút bật chỉ đường -->
-<button id="routeBtn">🧭 Chỉ đường</button>
-<div id="routeInstructions"></div>
 <div id="map"></div>
+<div class="custom-button" id="toggleRouteBtn">🗺️ Chỉ đường</div>
 
-<!-- Leaflet & Plugins -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-  const startPoint = L.latLng(21.023872, 105.790434); // fixed start point
-  const map = L.map('map').setView(startPoint, 14);
+  const fixedStartLatLng = L.latLng(21.023872, 105.790434);
+  const map = L.map('map').setView(fixedStartLatLng, 14);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  L.marker(startPoint).addTo(map).bindPopup("📍 Start Point").openPopup();
+  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start Point");
 
-  // Get search query from URL
   const params = new URLSearchParams(window.location.search);
   const searchQuery = params.get('q');
-  let destinationPoint = null;
+  let routingControl = null;
 
-  // Fetch destination
   if (searchQuery) {
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
       .then(res => res.json())
       .then(data => {
         if (data.length > 0) {
-          destinationPoint = L.latLng(data[0].lat, data[0].lon);
-          L.marker(destinationPoint).addTo(map).bindPopup("🏁 " + searchQuery).openPopup();
+          const destLatLng = L.latLng(data[0].lat, data[0].lon);
+          L.marker(destLatLng).addTo(map).bindPopup("🏁 " + searchQuery);
+
+          // Khởi tạo sẵn routing nhưng chưa add vào map
+          routingControl = L.Routing.control({
+            waypoints: [fixedStartLatLng, destLatLng],
+            routeWhileDragging: false,
+            fitSelectedRoutes: true,
+            showAlternatives: false,
+            addWaypoints: false,
+            createMarker: function(i, wp) {
+              return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
+            },
+            lineOptions: {
+              styles: [{ color: 'blue', opacity: 0.7, weight: 5 }]
+            }
+          });
+
+          // Gán sự kiện cho nút toggle
+          const toggleBtn = document.getElementById('toggleRouteBtn');
+          let isRoutingShown = false;
+
+          toggleBtn.addEventListener('click', () => {
+            if (!routingControl) return;
+            if (!isRoutingShown) {
+              routingControl.addTo(map);
+              isRoutingShown = true;
+              toggleBtn.textContent = "❌ Ẩn chỉ đường";
+            } else {
+              map.removeControl(routingControl);
+              isRoutingShown = false;
+              toggleBtn.textContent = "🗺️ Chỉ đường";
+            }
+          });
         } else {
           alert("❌ Destination not found.");
         }
       });
   }
-
-  // Handle routing
-  let control = null;
-
-  document.getElementById("routeBtn").addEventListener("click", () => {
-    if (!destinationPoint) {
-      alert("❗ Please provide a valid destination in the URL (?q=...)");
-      return;
-    }
-
-    // Remove old route if exists
-    if (control) {
-      map.removeControl(control);
-    }
-
-    // Create routing control
-    control = L.Routing.control({
-      waypoints: [startPoint, destinationPoint],
-      routeWhileDragging: false,
-      fitSelectedRoutes: true,
-      showAlternatives: false,
-      createMarker: (i, wp) => {
-        return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
-      },
-      lineOptions: {
-        styles: [{ color: 'blue', opacity: 0.8, weight: 5 }]
-      }
-    }).addTo(map);
-
-    // Show step-by-step instructions
-    control.on('routesfound', function(e) {
-      const instructionsDiv = document.getElementById('routeInstructions');
-      instructionsDiv.innerHTML = '<b>🧾 Directions:</b><br><ol>';
-
-      const steps = e.routes[0].instructions || e.routes[0].segments?.flatMap(s => s.steps) || [];
-      e.routes[0].instructions?.forEach((instr, idx) => {
-        instructionsDiv.innerHTML += `<li>${instr.text}</li>`;
-      });
-
-      // fallback if no instructions
-      if (instructionsDiv.innerHTML === '<b>🧾 Directions:</b><br><ol>') {
-        instructionsDiv.innerHTML += "<li>No step-by-step directions found.</li>";
-      }
-
-      instructionsDiv.innerHTML += "</ol>";
-      instructionsDiv.style.display = "block";
-    });
-  });
 </script>
 
 </body>
