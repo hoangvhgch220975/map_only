@@ -8,6 +8,8 @@
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; width: 100%; }
+
+    /* Toggle button styling */
     .custom-button {
       position: absolute;
       top: 10px;
@@ -20,29 +22,38 @@
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
+
+    /* Hide directions panel initially */
+    .leaflet-routing-container {
+      display: none;
+    }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
-<div class="custom-button" id="toggleRouteBtn">🗺️ Chỉ đường</div>
+<div class="custom-button" id="toggleInstructions">🗺️ Show Directions</div>
 
+<!-- Load Leaflet and Routing Machine -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-  const fixedStartLatLng = L.latLng(21.023872, 105.790434);
+  const fixedStartLatLng = L.latLng(21.023872, 105.790434); // Fixed Start Point
+
   const map = L.map('map').setView(fixedStartLatLng, 14);
 
+  // Add OpenStreetMap tiles
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
+  // Start marker
   L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start Point");
 
+  // Get destination from URL parameter ?q=
   const params = new URLSearchParams(window.location.search);
   const searchQuery = params.get('q');
-  let routingControl = null;
 
   if (searchQuery) {
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
@@ -50,39 +61,38 @@
       .then(data => {
         if (data.length > 0) {
           const destLatLng = L.latLng(data[0].lat, data[0].lon);
+
+          // Destination marker
           L.marker(destLatLng).addTo(map).bindPopup("🏁 " + searchQuery);
 
-          // Khởi tạo sẵn routing nhưng chưa add vào map
-          routingControl = L.Routing.control({
+          // Routing control setup
+          const routingControl = L.Routing.control({
             waypoints: [fixedStartLatLng, destLatLng],
             routeWhileDragging: false,
             fitSelectedRoutes: true,
             showAlternatives: false,
             addWaypoints: false,
-            createMarker: function(i, wp) {
-              return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
-            },
             lineOptions: {
               styles: [{ color: 'blue', opacity: 0.7, weight: 5 }]
+            },
+            createMarker: function(i, wp) {
+              return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
             }
-          });
+          }).addTo(map);
 
-          // Gán sự kiện cho nút toggle
-          const toggleBtn = document.getElementById('toggleRouteBtn');
-          let isRoutingShown = false;
-
+          // Toggle the directions panel
+          const toggleBtn = document.getElementById('toggleInstructions');
           toggleBtn.addEventListener('click', () => {
-            if (!routingControl) return;
-            if (!isRoutingShown) {
-              routingControl.addTo(map);
-              isRoutingShown = true;
-              toggleBtn.textContent = "❌ Ẩn chỉ đường";
+            const container = document.querySelector('.leaflet-routing-container');
+            if (container.style.display === 'none') {
+              container.style.display = 'block';
+              toggleBtn.textContent = "❌ Hide Directions";
             } else {
-              map.removeControl(routingControl);
-              isRoutingShown = false;
-              toggleBtn.textContent = "🗺️ Chỉ đường";
+              container.style.display = 'none';
+              toggleBtn.textContent = "🗺️ Show Directions";
             }
           });
+
         } else {
           alert("❌ Destination not found.");
         }
