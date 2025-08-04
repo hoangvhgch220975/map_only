@@ -39,8 +39,19 @@
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
+  // Hà Nội - Vị trí giới hạn (bounding box)
+  const latLngBounds = L.latLngBounds(
+    L.latLng(20.8122, 105.2531), // Góc trên trái
+    L.latLng(21.4239, 106.3745)  // Góc dưới phải
+  );
+
   const fixedStartLatLng = L.latLng(21.023872, 105.790434);
-  const map = L.map('map').setView(fixedStartLatLng, 14);
+  const map = L.map('map', {
+    center: fixedStartLatLng,
+    zoom: 14,
+    maxBounds: latLngBounds,  // Giới hạn bản đồ
+    maxBoundsViscosity: 1.0   // Đảm bảo không di chuyển ra ngoài vùng giới hạn
+  });
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
