@@ -1,29 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Map Route from Fixed Start Point</title>
+  <title>Map Route with Search & Tap-to-Pick</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; width: 100%; }
 
-    /* Toggle button styling */
+    /* Search Bar */
+    #searchBox {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 420px;
+      z-index: 2000;
+      background: white;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid #bbb;
+      font-size: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    /* Search results dropdown */
+    #searchResults {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 420px;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 2001;
+      border: 1px solid #ccc;
+      display: none;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .result-item {
+      padding: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+    }
+    .result-item:hover {
+      background: #f5f5f5;
+    }
+
+    /* Toggle Directions button */
     .custom-button {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
+      top: 12px;
+      right: 14px;
+      z-index: 1500;
       background: white;
       border: 2px solid #888;
-      border-radius: 5px;
+      border-radius: 6px;
       padding: 6px 10px;
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* Hide directions panel initially */
     .leaflet-routing-container {
       display: none;
     }
@@ -31,90 +76,115 @@
 </head>
 <body>
 
-<div id="map"></div>
-<div class="custom-button" id="toggleInstructions">🗺️ Show Directions</div>
+<input id="searchBox" type="text" placeholder="Search destination..." autocomplete="off">
+<div id="searchResults"></div>
 
-<!-- Load Leaflet and Routing Machine -->
+<div class="custom-button" id="toggleInstructions">🗺️ Show Directions</div>
+<div id="map"></div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-  // Hà Nội - Vị trí giới hạn (bounding box)
-  const latLngBounds = L.latLngBounds(
-    L.latLng(20.8122, 105.2531), // Góc trên trái
-    L.latLng(21.4239, 106.3745)  // Góc dưới phải
-  );
-
   const fixedStartLatLng = L.latLng(21.023872, 105.790434);
+
   const map = L.map('map', {
     center: fixedStartLatLng,
-    zoom: 14,
-    maxBounds: latLngBounds,  // Giới hạn bản đồ
-    maxBoundsViscosity: 1.0   // Đảm bảo không di chuyển ra ngoài vùng giới hạn
+    zoom: 14
   });
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 You are here").openPopup();
+  L.marker(fixedStartLatLng).addTo(map).bindPopup("📍 Start here");
 
-  const params = new URLSearchParams(window.location.search);
-  const searchQuery = params.get('q');
+  let routingControl = null;
+  let destMarker = null;
 
-  if (searchQuery) {
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.length > 0) {
-          const destLatLng = L.latLng(data[0].lat, data[0].lon);
-          L.marker(destLatLng).addTo(map).bindPopup("🏁 " + searchQuery);
+  function drawRoute(destLatLng) {
+    if (routingControl) map.removeControl(routingControl);
+    if (destMarker) map.removeLayer(destMarker);
 
-          const routingControl = L.Routing.control({
-            waypoints: [fixedStartLatLng, destLatLng],
-            routeWhileDragging: false,
-            fitSelectedRoutes: true,
-            showAlternatives: false,
-            addWaypoints: false,
-            lineOptions: {
-              styles: [{ color: 'blue', opacity: 0.7, weight: 5 }]
-            },
-            createMarker: function(i, wp) {
-              return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
-            }
-          }).addTo(map);
+    destMarker = L.marker(destLatLng).addTo(map).bindPopup("🏁 Destination");
 
-          // Wait for the directions container to appear, then allow toggling
-          const toggleBtn = document.getElementById('toggleInstructions');
+    routingControl = L.Routing.control({
+      waypoints: [fixedStartLatLng, destLatLng],
+      routeWhileDragging: false,
+      fitSelectedRoutes: true,
+      addWaypoints: false,
+      lineOptions: { styles: [{ color: 'blue', weight: 5 }] },
+      createMarker: function(i, wp) {
+        return L.marker(wp.latLng).bindPopup(i === 0 ? "📍 Start" : "🏁 Destination");
+      }
+    }).addTo(map);
 
-          const observer = new MutationObserver(() => {
-            const container = document.querySelector('.leaflet-routing-container');
-            if (container) {
-              container.style.display = 'none'; // Hide by default
-
-              // Only add event listener after container is ready
-              toggleBtn.addEventListener('click', () => {
-                if (container.style.display === 'none') {
-                  container.style.display = 'block';
-                  toggleBtn.textContent = "❌ Hide Directions";
-                } else {
-                  container.style.display = 'none';
-                  toggleBtn.textContent = "🗺️ Show Directions";
-                }
-              });
-
-              observer.disconnect(); // Stop observing after found
-            }
-          });
-
-          // Start observing changes in the map container
-          observer.observe(document.body, { childList: true, subtree: true });
-
-        } else {
-          alert("❌ Destination not found.");
-        }
-      });
+    const container = document.querySelector('.leaflet-routing-container');
+    container.style.display = "none";
   }
+
+  // SEARCH BAR LOGIC
+  const searchBox = document.getElementById("searchBox");
+  const searchResults = document.getElementById("searchResults");
+
+  searchBox.addEventListener("input", async () => {
+    const text = searchBox.value.trim();
+    if (text.length < 2) {
+      searchResults.style.display = "none";
+      return;
+    }
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    searchResults.innerHTML = "";
+    data.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "result-item";
+      div.textContent = item.display_name;
+      div.onclick = () => {
+        const destLatLng = L.latLng(item.lat, item.lon);
+        searchBox.value = item.display_name;
+        searchResults.style.display = "none";
+        drawRoute(destLatLng);
+        map.flyTo(destLatLng, 15);
+      };
+      searchResults.appendChild(div);
+    });
+
+    searchResults.style.display = "block";
+  });
+
+  // HIDE RESULTS WHEN CLICK OUTSIDE
+  document.addEventListener("click", (e) => {
+    if (e.target !== searchBox) {
+      searchResults.style.display = "none";
+    }
+  });
+
+  // TAP TO PICK LOCATION
+  map.on("click", (e) => {
+    const destLatLng = e.latlng;
+    searchBox.value = `${destLatLng.lat.toFixed(6)}, ${destLatLng.lng.toFixed(6)}`;
+    drawRoute(destLatLng);
+  });
+
+  // TOGGLE DIRECTIONS PANEL
+  const toggleBtn = document.getElementById("toggleInstructions");
+  toggleBtn.addEventListener("click", () => {
+    const container = document.querySelector(".leaflet-routing-container");
+    if (!container) return;
+
+    if (container.style.display === "none") {
+      container.style.display = "block";
+      toggleBtn.textContent = "❌ Hide Directions";
+    } else {
+      container.style.display = "none";
+      toggleBtn.textContent = "🗺️ Show Directions";
+    }
+  });
 </script>
 
 </body>
