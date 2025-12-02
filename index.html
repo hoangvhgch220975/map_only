@@ -389,6 +389,23 @@
   let currentDistance = 0;
   let selectedLocation = null;
 
+  // Check if location permission is granted - Kiểm tra quyền truy cập vị trí
+  async function checkLocationPermission() {
+    if (!navigator.permissions) {
+      console.log('Permissions API not supported');
+      return 'prompt'; // Unknown, will prompt when requested
+    }
+
+    try {
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+      console.log('Location permission status:', result.state);
+      return result.state; // 'granted', 'denied', or 'prompt'
+    } catch (error) {
+      console.warn('Error checking permission:', error);
+      return 'prompt';
+    }
+  }
+
   // Get current location from device - Lấy vị trí hiện tại từ thiết bị
   function getCurrentLocation() {
     // Prevent multiple simultaneous requests - Ngăn gọi nhiều lần cùng lúc
@@ -398,42 +415,71 @@
     btn.classList.add('loading');
     isGettingCurrentLocation = true;
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // Success callback - Callback thành công
-          startLatLng = L.latLng(position.coords.latitude, position.coords.longitude);
-          startMarker.setLatLng(startLatLng);
-          map.setView(startLatLng, 15);
-          startMarker.bindPopup('📍 Your Current Location').openPopup();
-
-          btn.classList.remove('loading');
-          isGettingCurrentLocation = false;
-
-          console.log('✅ Got current location:', startLatLng);
-        },
-        (error) => {
-          // Error callback - Callback lỗi
-          console.warn('❌ Geolocation error:', error);
-          alert('Cannot get current location. Please enable GPS and grant location permission.');
-          btn.classList.remove('loading');
-          isGettingCurrentLocation = false;
-        },
-        {
-          enableHighAccuracy: true, // Độ chính xác cao
-          timeout: 10000, // Timeout 10 giây
-          maximumAge: 0 // Không dùng cache
-        }
-      );
-    } else {
-      alert('Browser does not support GPS');
+    // Check if geolocation is supported - Kiểm tra hỗ trợ GPS
+    if (!navigator.geolocation) {
+      console.error('❌ Geolocation not supported');
+      alert('Your browser does not support GPS location.');
       btn.classList.remove('loading');
       isGettingCurrentLocation = false;
+      return;
     }
+
+    // Request current position - Yêu cầu vị trí hiện tại
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        // Success callback - Callback thành công
+        startLatLng = L.latLng(position.coords.latitude, position.coords.longitude);
+        startMarker.setLatLng(startLatLng);
+        map.setView(startLatLng, 15);
+        startMarker.bindPopup('📍 Your Current Location').openPopup();
+
+        btn.classList.remove('loading');
+        isGettingCurrentLocation = false;
+
+        console.log('✅ Got current location:', startLatLng);
+      },
+      (error) => {
+        // Error callback with detailed handling - Callback lỗi với xử lý chi tiết
+        console.warn('❌ Geolocation error:', error.code, error.message);
+        btn.classList.remove('loading');
+        isGettingCurrentLocation = false;
+
+        // Handle different error codes - Xử lý các loại lỗi khác nhau
+        let errorMsg = '';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = 'Location permission denied. Please allow location access in your browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = 'Location information unavailable. Please check your GPS/network.';
+            break;
+          case error.TIMEOUT:
+            errorMsg = 'Location request timed out. Please try again.';
+            break;
+          default:
+            errorMsg = 'Unknown error getting location. Please try again.';
+        }
+
+        // Show error but don't block usage - Hiển thị lỗi nhưng không chặn sử dụng
+        console.log('Using default location (Hanoi)');
+        // User can still use map by searching or tapping
+      },
+      {
+        enableHighAccuracy: true, // Độ chính xác cao
+        timeout: 15000, // Timeout 15 giây (tăng lên)
+        maximumAge: 60000 // Accept cached position up to 1 minute old
+      }
+    );
   }
 
-  // Try to get current location on load - Tự động lấy vị trí khi load
-  setTimeout(getCurrentLocation, 1000);
+  // Try to get current location on load - silent fail - Thử lấy vị trí khi load (không báo lỗi)
+  // Only try if not in iframe (when embedded in Flutter WebView)
+  if (window.self === window.top) {
+    setTimeout(getCurrentLocation, 1000);
+  } else {
+    // In WebView, wait for user to click button - Trong WebView, đợi user click
+    console.log('Running in WebView - GPS on demand only');
+  }
 
   // Current location button
   document.getElementById('currentLocationBtn').onclick = getCurrentLocation;
@@ -658,4 +704,3 @@
 
 </body>
 </html>
-er a
